@@ -12,6 +12,9 @@ sensor:
           window_size: 60
           send_every: 60
 
+  # NOTE: Template sensors have known linking issues with ESP-IDF framework.
+  # If you get "undefined reference to vtable for TemplateSensor" errors,
+  # use calibration-with-psi.yaml instead, which uses on_value callbacks instead.
   - platform: template
     name: "PSI ${probe_id}"
     id: psi_${probe_id}

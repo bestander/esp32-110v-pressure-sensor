@@ -3,6 +3,8 @@ esphome:
   friendly_name: "Water Pressure 01"
   includes:
     - templates/calibration_tables.h
+  platformio_options:
+    board_build.flash_mode: dio
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -30,16 +32,20 @@ wifi:
 
 captive_portal:
 
+# NOTE: Using ESP-IDF compatible version without template sensors
+# Template sensors have linking issues with ESP-IDF framework
+# PSI values are calculated and logged - use Home Assistant templates
+# to create a PSI sensor from the voltage reading if needed
 packages:
   probe1: !include
-    file: templates/pressure_probe.yaml
+    file: templates/pressure_probe_espidf.yaml
     vars:
       probe_id: "1"
       probe_pin: GPIO1
-      calibration_id: "0-0.8MPa"
+      calibration_id: "0-1.0MPa"
   probe2: !include
-    file: templates/pressure_probe.yaml
+    file: templates/pressure_probe_espidf.yaml
     vars:
       probe_id: "2"
       probe_pin: GPIO3
-      calibration_id: "0-0.8MPa"
+      calibration_id: "0-1.0MPa"

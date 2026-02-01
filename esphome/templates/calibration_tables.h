@@ -1,5 +1,5 @@
 #pragma once
-#include <cstring>
+#include <string.h>
 
 struct CalibrationTable {
   const char* id;

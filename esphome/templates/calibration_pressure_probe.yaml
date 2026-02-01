@@ -10,31 +10,56 @@ sensor:
     on_value:
       then:
         - lambda: |-
+            // Guard against invalid readings (ADC should be 0-3.3V, sensor with divider ~0-1.67V)
+            if (isnan(x) || x < 0.0f || x > 5.0f) {
+              return;
+            }
+            
             float raw = x;
 
             // Moving average (10-sample window)
-            static float buf[10];
-            static int idx = 0, cnt = 0;
+            // Use function-local statics (safer in ESP-IDF)
+            static float buf[10] = {0};
+            static int idx = 0;
+            static int cnt = 0;
+            static bool initialized = false;
+            
+            if (!initialized) {
+              // Initialize buffer on first call
+              for (int i = 0; i < 10; i++) buf[i] = raw;
+              initialized = true;
+              cnt = 10;
+            }
+            
             buf[idx] = raw;
             idx = (idx + 1) % 10;
             if (cnt < 10) cnt++;
-            float sum = 0;
-            for (int i = 0; i < cnt; i++) sum += buf[i];
+            
+            float sum = 0.0f;
+            for (int i = 0; i < cnt; i++) {
+              sum += buf[i];
+            }
             float avg = roundf(sum / cnt * 100.0f) / 100.0f;
 
             // PSI interpolation (from averaged voltage)
-            auto* cal = find_calibration("${calibration_id}");
+            const char* cal_id = "${calibration_id}";
+            auto* cal = find_calibration(cal_id);
             if (!cal) {
-              ESP_LOGE("cal_${probe_id}", "Unknown calibration table: ${calibration_id}");
+              ESP_LOGE("cal_${probe_id}", "Unknown calibration table: %s", cal_id);
               return;
             }
 
             const float (*table)[2] = cal->points;
             const int TABLE_SIZE = cal->size;
-            float psi = 0.0;
+            if (TABLE_SIZE < 2) {
+              ESP_LOGE("cal_${probe_id}", "Invalid calibration table size");
+              return;
+            }
+            
+            float psi = 0.0f;
 
             if (avg < table[0][0]) {
-              psi = 0.0;
+              psi = 0.0f;
             } else if (avg > table[TABLE_SIZE - 1][0]) {
               psi = table[TABLE_SIZE - 1][1];
             } else {
