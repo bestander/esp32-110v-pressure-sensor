@@ -61,9 +61,9 @@ esphome/
   calibration-config.yaml          # Raw voltage output for calibration
   calibration-with-psi.yaml        # Calibration with voltage, moving average, and PSI
   templates/
-    pressure_probe.yaml            # Production probe template
-    calibration_pressure_probe.yaml # Calibration probe template
-    calibration_tables.h           # Shared calibration tables (voltage → PSI)
+    pressure_probe.yaml            # Production probe template (Arduino; PSI via calibrate_linear)
+    pressure_probe_espidf.yaml       # ESP-IDF probe (voltage only; add PSI in example-config.yaml)
+    calibration_pressure_probe.yaml # Calibration logging (0–0.8 MPa curve inline in lambda)
   secrets.yaml.example             # Template showing required secrets
 ```
 
@@ -84,23 +84,11 @@ esphome/
 
 The example config uses GPIO1 and GPIO3. Adjust `probe_pin` values if using different pins.
 
-Each probe references a calibration table by ID. Set `calibration_id` in the probe's vars to match a table defined in `templates/calibration_tables.h`:
-
-```yaml
-packages:
-  probe1: !include
-    file: templates/pressure_probe.yaml
-    vars:
-      probe_id: "1"
-      probe_pin: GPIO1
-      calibration_id: "0-0.8MPa"
-```
-
-Multiple probes can share the same calibration table.
+Production builds use **`example-config.yaml`**: voltage comes from `pressure_probe_espidf.yaml`, and **PSI** is computed in YAML with `sensor` → `copy` → `calibrate_linear` (`method: exact`) so you can edit voltage→PSI points without C headers.
 
 ## Calibration
 
-Calibration tables are defined in `esphome/templates/calibration_tables.h`. Each table maps ADC voltage readings to PSI using piecewise linear interpolation. Tables are identified by string IDs (e.g., `"0-0.8MPa"`, `"0-1.0MPa"`).
+Voltage→PSI breakpoints live in **`example-config.yaml`** (anchor `cal_0_1mpa_psi` for the 0–1.0 MPa probe). `calibration-with-psi.yaml` uses a **0–0.8 MPa** curve inlined in `templates/calibration_pressure_probe.yaml` for log output only.
 
 Current calibrations are tuned for:
 - G1/4 pressure sensor (0-1 MPa / 0-100 PSI, 0-5V output)
@@ -109,23 +97,10 @@ Current calibrations are tuned for:
 
 **Recalibrate if any of these differ.**
 
-### Adding a Calibration Table
+### Updating calibration data
 
-Edit `esphome/templates/calibration_tables.h`:
-
-1. Add a new array with your measured voltage/PSI pairs:
-   ```c
-   static const float cal_my_sensor[][2] = {
-     {0.000f,  0.0f},
-     {0.100f, 10.0f},
-     // ... your measured values
-   };
-   ```
-2. Register it in the `CALIBRATION_TABLES` array:
-   ```c
-   {"my_sensor", cal_my_sensor, sizeof(cal_my_sensor) / sizeof(cal_my_sensor[0])},
-   ```
-3. Reference the ID in your device config: `calibration_id: "my_sensor"`
+1. **Normal operation (`example-config.yaml`):** Edit the `datapoints` under `.cal_0_1mpa_psi` (and keep `pressure_probe.yaml` in sync if you use the Arduino template).
+2. **Calibration log (`calibration-with-psi.yaml`):** Edit the `static const float table[][2]` in `templates/calibration_pressure_probe.yaml` for the 0–0.8 MPa helper curve.
 
 ### Equipment
 
@@ -138,7 +113,7 @@ A manual hydrostatic pressure tester works well for calibration. The [IRONWALLS 
 3. Open ESPHome logs to see readings
 4. Apply pressure at several points (e.g., 0, 10, 20, 30... 100 PSI)
 5. At each point, record the voltage reading from the logs
-6. Add or update a calibration table in `templates/calibration_tables.h` (see "Adding a Calibration Table" above)
+6. Update the `calibrate_linear` datapoints in `example-config.yaml` (and templates if applicable)
 7. Flash the normal config (`example-config.yaml`) and verify readings match the gauge
 
 ## Known Issues

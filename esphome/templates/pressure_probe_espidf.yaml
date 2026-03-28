@@ -1,5 +1,5 @@
-# ESP-IDF compatible version - uses on_value callback instead of template sensor
-# This avoids the template sensor linking issue with ESP-IDF
+# ESP-IDF compatible — no template sensors (linking issues with ESP-IDF).
+# Add PSI in the main YAML with copy + calibrate_linear (see example-config.yaml).
 sensor:
   - platform: adc
     pin: ${probe_pin}
@@ -13,42 +13,3 @@ sensor:
       - sliding_window_moving_average:
           window_size: 60
           send_every: 60
-    on_value:
-      then:
-        - lambda: |-
-            // Calculate PSI from voltage and log it
-            // Note: For full Home Assistant integration, calculate PSI in HA templates
-            // using the voltage sensor value, or use this for logging/monitoring
-            float voltage = x;
-            if (isnan(voltage)) {
-              ESP_LOGW("pressure_${probe_id}", "Waiting for first voltage reading");
-              return;
-            }
-
-            auto* cal = find_calibration("${calibration_id}");
-            if (!cal) {
-              ESP_LOGE("pressure_${probe_id}", "Unknown calibration table: ${calibration_id}");
-              return;
-            }
-
-            const float (*table)[2] = cal->points;
-            const int TABLE_SIZE = cal->size;
-            const float EPSILON = 0.0001;
-            float psi = 0.0f;
-
-            if (voltage < table[0][0] - EPSILON) {
-              psi = 0.0f;
-            } else if (voltage > table[TABLE_SIZE - 1][0] + EPSILON) {
-              psi = 100.0f;
-            } else {
-              for (int i = 0; i < TABLE_SIZE - 1; i++) {
-                float x0 = table[i][0], x1 = table[i+1][0];
-                if (voltage >= x0 - EPSILON && voltage <= x1 + EPSILON) {
-                  float y0 = table[i][1], y1 = table[i+1][1];
-                  psi = y0 + (voltage - x0)*(y1 - y0)/(x1 - x0);
-                  break;
-                }
-              }
-            }
-
-            ESP_LOGI("pressure_${probe_id}", "Voltage: %.3f V, PSI: %.1f", voltage, psi);
